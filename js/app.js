@@ -10,7 +10,48 @@
 
   Ashby.init($('chart'), $('tip'), MATERIALES, fams,
     {labels:()=>$('optLabels').checked, hulls:()=>$('optHull').checked},
-    (n,t) => $('count').textContent = `${n} de ${t} materiales`);
+    (n,t,s) => { $('count').textContent = `${n} de ${t} materiales`; updateStats(n,t,s); },
+    showDetail);
+
+  /* ---------- estadísticas animadas ---------- */
+  const tweens = new Map();
+  function countTo(el, to, dec=0){
+    const from = parseFloat(el.dataset.v ?? 0) || 0; el.dataset.v = to;
+    cancelAnimationFrame(tweens.get(el)); const t0 = performance.now();
+    const step = now => { const k = Math.min(1,(now-t0)/600), e = 1-Math.pow(1-k,3);
+      el.textContent = (from+(to-from)*e).toFixed(dec); if(k<1) tweens.set(el, requestAnimationFrame(step)); };
+    step(t0);
+  }
+  const nf = v => v>=1e4||(v<1e-2&&v>0) ? v.toExponential(1) : +v.toPrecision(3)+'';
+  function updateStats(n,t,s){
+    countTo($('stN'), n); $('stT').textContent = `de ${t}`; countTo($('stF'), s.fams);
+    const d = s.d;
+    $('stXl').textContent = PROPS[d.x].l; $('stYl').textContent = PROPS[d.y].l;
+    $('stX').textContent = `${nf(s.xr[0])} – ${nf(s.xr[1])}`; $('stXu').textContent = PROPS[d.x].u;
+    $('stY').textContent = `${nf(s.yr[0])} – ${nf(s.yr[1])}`; $('stYu').textContent = PROPS[d.y].u;
+  }
+
+  /* ---------- ficha del material fijado ---------- */
+  const BASE = ['Densidad','Modulo_de_Young_GPa','Limite_Elastico_MPa','Conductividad_Termica','Resistividad_Electrica','Expansion_Termica','Capacidad_Calorifica'];
+  function showDetail(sel){
+    const box = $('detail');
+    if(!sel){ box.hidden = true; return; }
+    const {m,color} = sel, d = diagrams.find(x=>x.id===activeId);
+    const fmtv = v => v>=1e4||v<1e-2 ? v.toExponential(2) : +v.toPrecision(3)+'';
+    box.style.setProperty('--c', color);
+    box.innerHTML = `<button class="close" aria-label="Cerrar">&times;</button><h3>${m.Material}</h3><em>${m.Familia.replace('_',' / ')}</em>
+      <ul>${BASE.map(k=>`<li class="${d&&(k===d.x||k===d.y)?'cur':''}"><span>${PROPS[k].l}</span><strong>${fmtv(m[k])} <small>${PROPS[k].u}</small></strong></li>`).join('')}</ul>`;
+    box.hidden = false;
+    box.querySelector('.close').onclick = () => { Ashby.unpin(); box.hidden = true; };
+  }
+
+  /* ---------- interactividad: luz del cursor y parallax ---------- */
+  document.addEventListener('mousemove', e => {
+    document.querySelectorAll('.glow').forEach(el => { const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', (e.clientX-r.left)+'px'); el.style.setProperty('--my', (e.clientY-r.top)+'px'); });
+    const x = e.clientX/innerWidth-.5, y = e.clientY/innerHeight-.5;
+    document.querySelectorAll('.orb').forEach((o,i) => o.style.transform = `translate(${x*(i+1)*-40}px,${y*(i+1)*-40}px)`);
+  });
 
   /* ---------- estado ---------- */
   function open(spec){
@@ -79,7 +120,8 @@
 
   /* ---------- leyenda y controles ---------- */
   Object.entries(fams).forEach(([f,col]) => {
-    const b = document.createElement('button'); b.innerHTML = `<i style="--c:${col}33;background:${col}"></i><span>${f.replace('_',' / ')}</span>`;
+    const b = document.createElement('button'); b.innerHTML = `<i style="--c:${col};background:${col}"></i><span>${f.replace('_',' / ')}</span>`;
+    b.style.setProperty('--c', col);
     b.onclick = () => { Ashby.toggleFamily(f); b.classList.toggle('off'); };
     $('legend').appendChild(b);
   });

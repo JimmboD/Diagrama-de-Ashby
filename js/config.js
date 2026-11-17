@@ -29,4 +29,4 @@ const SUGGESTED = [
   {x:'Densidad',              y:'Alpha',                 name:'Difusividad térmica vs Densidad'},
   {x:'Limite_Elastico_MPa',   y:'Resistividad_Electrica',name:'Resistividad eléctrica vs Límite elástico'},
 ];
-const FAM_COLORS = ['#2563eb','#dc2626','#7c3aed','#d97706','#059669','#db2777','#0891b2','#ea580c'];
+const FAM_COLORS = ['#60a5fa','#f87171','#a78bfa','#fbbf24','#34d399','#f472b6','#22d3ee','#fb923c'];

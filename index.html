@@ -7,10 +7,13 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<div class="bg" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span><div class="grain"></div></div>
+
 <header class="top">
   <button id="toggleSide" class="burger" type="button" aria-label="Mostrar u ocultar gráficas">☰</button>
   <div class="brand"><span class="mark"></span>Ashby</div>
   <span class="tagline">Selección de materiales</span>
+  <span class="hint">Pasa el cursor sobre un punto · clic para fijarlo</span>
 </header>
 
 <div class="layout">
@@ -26,20 +29,27 @@
     </section>
 
     <section id="viewChart">
+      <div class="stats">
+        <div class="stat glow"><small>Materiales</small><b id="stN">0</b><em id="stT"></em></div>
+        <div class="stat glow"><small>Familias</small><b id="stF">0</b><em>visibles</em></div>
+        <div class="stat glow"><small id="stXl">Eje X</small><b id="stX" class="rng">—</b><em id="stXu"></em></div>
+        <div class="stat glow"><small id="stYl">Eje Y</small><b id="stY" class="rng">—</b><em id="stYu"></em></div>
+      </div>
+
       <div id="legend" class="legend"></div>
-      <div class="chart-wrap">
+      <div class="chart-wrap glow">
         <canvas id="chart"></canvas>
         <div id="tip" class="tip"></div>
+        <div id="detail" class="detail" hidden></div>
       </div>
       <div class="chart-tools">
         <label class="switch"><input type="checkbox" id="optLabels"><i></i> Etiquetas</label>
         <label class="switch"><input type="checkbox" id="optHull" checked><i></i> Regiones</label>
         <span id="count" class="pill"></span>
       </div>
-
     </section>
 
-    <section id="viewNew" class="panel" hidden>
+    <section id="viewNew" class="panel glow" hidden>
       <label>Diagrama sugerido
         <select id="selSug"></select>
       </label>

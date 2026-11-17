@@ -1,9 +1,10 @@
-/* Motor de dibujo de diagramas de Ashby (canvas) */
+/* Motor de dibujo de diagramas de Ashby (canvas) — tema oscuro */
 const Ashby = (() => {
   const M = {l:78, r:24, t:18, b:62};
+  const C = {txt:'#e7e9f0', mut:'#8b90a3', bg:'#0a0b10', grid:'#ffffff14', gridMinor:'#ffffff08'};
   let cv, ctx, tip, mats = [], fams = {}, hidden = new Set();
-  let cur = null, W = 0, H = 0, dpr = 1, anim = {start:0}, hover = null;
-  let opts = {labels:()=>false, hulls:()=>true}, onCount = ()=>{};
+  let cur = null, W = 0, H = 0, dpr = 1, anim = {start:0}, hover = null, pinned = null, mouse = null;
+  let opts = {labels:()=>false, hulls:()=>true}, onCount = ()=>{}, onPin = ()=>{};
 
   const val = (m,k) => PROPS[k].f ? PROPS[k].f(m) : m[k];
   const fmt = v => v>=1e4||v<1e-2 ? v.toExponential(2) : +v.toPrecision(3)+'';
@@ -13,12 +14,13 @@ const Ashby = (() => {
   const hexA = (h,a) => h+Math.round(a*255).toString(16).padStart(2,'0');
   const sup = n => String(n).split('').map(c=>'⁰¹²³⁴⁵⁶⁷⁸⁹⁻'['0123456789-'.indexOf(c)]).join('');
 
-  function init(canvas, tooltip, materials, families, options, countCb){
+  function init(canvas, tooltip, materials, families, options, countCb, pinCb){
     cv = canvas; ctx = cv.getContext('2d'); tip = tooltip;
-    mats = materials; fams = families; opts = options; onCount = countCb;
+    mats = materials; fams = families; opts = options; onCount = countCb; onPin = pinCb;
     new ResizeObserver(resize).observe(cv.parentElement);
     cv.onmousemove = onMove;
-    cv.onmouseleave = () => { hover = null; tip.classList.remove('show'); };
+    cv.onmouseleave = () => { hover = null; mouse = null; tip.classList.remove('show'); };
+    cv.onclick = () => { pinned = (hover && hover!==pinned) ? hover : null; onPin(pinned ? {m:pinned.m, color:fams[pinned.m.Familia]} : null); };
     requestAnimationFrame(frame);
   }
   function resize(){
@@ -42,13 +44,19 @@ const Ashby = (() => {
     const old = new Map(); if(prev && prev.pts) prev.pts.forEach(p=>old.set(p.m,{x:p.cx,y:p.cy}));
     pts.forEach(p => {
       p.nx = norm(p.vx,cur.dx,logX); p.ny = norm(p.vy,cur.dy,logY);
-      const o = old.get(p.m); p.fx = o?o.x:p.nx; p.fy = o?o.y:0; p.cx=p.fx; p.cy=p.fy; p.s=0;
+      const o = old.get(p.m); p.fx = o?o.x:p.nx; p.fy = o?o.y:0; p.cx=p.fx; p.cy=p.fy; p.s=0; p.hv=0;
     });
-    anim.start = performance.now(); hover = null; tip.classList.remove('show');
+    anim.start = performance.now(); hover = null; pinned = null; onPin(null); tip.classList.remove('show');
     resize(); count();
   }
-  function count(){ if(cur) onCount(cur.pts.filter(p=>!hidden.has(p.m.Familia)).length, mats.length); }
-  function toggleFamily(f){ hidden.has(f) ? hidden.delete(f) : hidden.add(f); count(); }
+  function count(){
+    if(!cur) return;
+    const v = cur.pts.filter(p=>!hidden.has(p.m.Familia));
+    const rng = k => v.length ? [Math.min(...v.map(p=>p[k])), Math.max(...v.map(p=>p[k]))] : [0,0];
+    onCount(v.length, mats.length, {xr:rng('vx'), yr:rng('vy'), fams:new Set(v.map(p=>p.m.Familia)).size, d:cur.d});
+  }
+  function toggleFamily(f){ hidden.has(f) ? hidden.delete(f) : hidden.add(f); if(pinned && hidden.has(pinned.m.Familia)){ pinned=null; onPin(null); } count(); }
+  function unpin(){ pinned = null; }
 
   function hull(P){
     P = P.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]); if(P.length<3) return P;
@@ -69,31 +77,54 @@ const Ashby = (() => {
       const k = ease(Math.min(1,Math.max(0,t*1.3-i*0.012)));
       p.cx = p.fx+(p.nx-p.fx)*k; p.cy = p.fy+(p.ny-p.fy)*k; p.s = k;
       p.X = px(p.cx); p.Y = py(p.cy);
+      p.hv += ((hover===p?1:0)-p.hv)*.2;       // suavizado del hover
     });
     const vis = cur.pts.filter(p=>!hidden.has(p.m.Familia));
+    const focusF = hover ? hover.m.Familia : (pinned ? pinned.m.Familia : null);
+    const dim = f => focusF && f!==focusF ? .25 : 1;
+
     if(opts.hulls()) Object.keys(fams).forEach(f => {
       const g = vis.filter(p=>p.m.Familia==f); if(!g.length) return;
-      const h = hull(g.map(p=>[p.X,p.Y])), col = fams[f];
-      ctx.save(); ctx.globalAlpha = e; ctx.lineJoin='round'; ctx.lineCap='round';
+      const h = hull(g.map(p=>[p.X,p.Y])), col = fams[f], hot = focusF===f;
+      ctx.save(); ctx.globalAlpha = e*dim(f); ctx.lineJoin='round'; ctx.lineCap='round';
       ctx.beginPath(); h.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));
       if(h.length==1) ctx.lineTo(h[0][0]+.01,h[0][1]);
       if(h.length>2) ctx.closePath();
-      ctx.lineWidth = 34; ctx.strokeStyle = hexA(col,.10); ctx.stroke();
-      if(h.length>2){ ctx.fillStyle = hexA(col,.10); ctx.fill(); }
+      ctx.lineWidth = 34; ctx.strokeStyle = hexA(col,hot?.22:.12); ctx.stroke();
+      if(h.length>2){ ctx.fillStyle = hexA(col,hot?.22:.12); ctx.fill(); }
       ctx.restore();
     });
+
+    // retícula hacia los ejes
+    const fp = hover || pinned;
+    if(fp){
+      const col = fams[fp.m.Familia];
+      ctx.save(); ctx.setLineDash([4,5]); ctx.strokeStyle = hexA(col,.7); ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(M.l,fp.Y); ctx.lineTo(fp.X,fp.Y); ctx.lineTo(fp.X,H-M.b); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font='600 11px Segoe UI'; const chip = (txt,x,y,al) => {
+        const w = ctx.measureText(txt).width+12; const x0 = al=='c'?x-w/2:x-w;
+        ctx.fillStyle=col; ctx.beginPath(); ctx.roundRect(x0,y-10,w,20,6); ctx.fill();
+        ctx.fillStyle='#0a0b10'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(txt,x0+w/2,y); };
+      chip(fmt(fp.vx), fp.X, H-M.b+14, 'c'); chip(fmt(fp.vy), M.l-4, fp.Y, 'r');
+      ctx.restore();
+    }
+
     const pulse = (Math.sin(now/400)+1)/2;
     vis.forEach(p => {
-      const col = fams[p.m.Familia], isH = hover===p, r = (isH?10:7)*p.s; if(r<=0) return;
+      const col = fams[p.m.Familia], isP = pinned===p, r = (7+p.hv*4+(isP?2:0))*p.s; if(r<=0) return;
+      ctx.save(); ctx.globalAlpha = dim(p.m.Familia);
+      ctx.shadowColor = col; ctx.shadowBlur = 8 + p.hv*22 + pulse*3;
       ctx.beginPath(); ctx.arc(p.X,p.Y,r,0,7); ctx.fillStyle=col; ctx.fill();
-      ctx.lineWidth=2; ctx.strokeStyle='#fff'; ctx.stroke();
-      if(isH){ ctx.beginPath(); ctx.arc(p.X,p.Y,r+5+pulse*3,0,7); ctx.strokeStyle=hexA(col,.6); ctx.stroke(); }
-      ctx.globalAlpha = 1;
+      ctx.shadowBlur=0; ctx.lineWidth=2; ctx.strokeStyle=C.bg; ctx.stroke();
+      if(p.hv>.05 || isP){ ctx.beginPath(); ctx.arc(p.X,p.Y,r+5+pulse*3,0,7); ctx.lineWidth=1.5; ctx.strokeStyle=isP?'#ffffffcc':hexA(col,.7*Math.max(p.hv,.4)); ctx.stroke(); }
+      ctx.restore();
     });
+
     const all = opts.labels();
-    if(all || hover){
-      ctx.font='11.5px Segoe UI'; ctx.textBaseline='middle'; ctx.fillStyle='#1c1917'; ctx.globalAlpha=e;
-      vis.forEach(p => { if(!all && hover!==p) return;
+    if(all || hover || pinned){
+      ctx.font='11.5px Segoe UI'; ctx.textBaseline='middle'; ctx.fillStyle=C.txt; ctx.globalAlpha=e;
+      vis.forEach(p => { if(!all && hover!==p && pinned!==p) return;
+        ctx.globalAlpha = e*dim(p.m.Familia);
         const right = p.X+ctx.measureText(p.m.Material).width+16<W;
         ctx.textAlign = right?'left':'right'; ctx.fillText(p.m.Material,p.X+(right?12:-12),p.Y-12); });
       ctx.globalAlpha=1;
@@ -109,15 +140,15 @@ const Ashby = (() => {
   }
   function drawAxes(a){
     const {dx,dy,logX,logY,d} = cur, x0=M.l, x1=W-M.r, y0=H-M.b, y1=M.t;
-    ctx.save(); ctx.globalAlpha=a; ctx.font='12px Segoe UI'; ctx.fillStyle='#78716c'; ctx.lineWidth=1;
+    ctx.save(); ctx.globalAlpha=a; ctx.font='12px Segoe UI'; ctx.fillStyle=C.mut; ctx.lineWidth=1;
     ticks(dx,logX).forEach(t => { const X=px((t.v-dx[0])/(dx[1]-dx[0]));
-      ctx.strokeStyle=t.major?'#0000001a':'#0000000a'; ctx.beginPath(); ctx.moveTo(X,y0); ctx.lineTo(X,y1); ctx.stroke();
+      ctx.strokeStyle=t.major?C.grid:C.gridMinor; ctx.beginPath(); ctx.moveTo(X,y0); ctx.lineTo(X,y1); ctx.stroke();
       if(t.major){ ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText(logX?'10'+sup(t.v):fmt(t.v),X,y0+8); } });
     ticks(dy,logY).forEach(t => { const Y=py((t.v-dy[0])/(dy[1]-dy[0]));
-      ctx.strokeStyle=t.major?'#0000001a':'#0000000a'; ctx.beginPath(); ctx.moveTo(x0,Y); ctx.lineTo(x1,Y); ctx.stroke();
+      ctx.strokeStyle=t.major?C.grid:C.gridMinor; ctx.beginPath(); ctx.moveTo(x0,Y); ctx.lineTo(x1,Y); ctx.stroke();
       if(t.major){ ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.fillText(logY?'10'+sup(t.v):fmt(t.v),x0-8,Y); } });
-    ctx.strokeStyle='#1c1917'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x0,y0); ctx.lineTo(x1,y0); ctx.stroke();
-    ctx.fillStyle='#1c1917'; ctx.font='600 13px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.strokeStyle='#ffffff55'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x0,y0); ctx.lineTo(x1,y0); ctx.stroke();
+    ctx.fillStyle=C.txt; ctx.font='600 13px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='bottom';
     ctx.fillText(`${PROPS[d.x].l} (${PROPS[d.x].u})`,(x0+x1)/2,H-6);
     ctx.translate(16,(y0+y1)/2); ctx.rotate(-Math.PI/2); ctx.textBaseline='top';
     ctx.fillText(`${PROPS[d.y].l} (${PROPS[d.y].u})`,0,0);
@@ -126,17 +157,19 @@ const Ashby = (() => {
 
   function onMove(ev){
     if(!cur) return;
-    const r = cv.getBoundingClientRect(), x = ev.clientX-r.left, y = ev.clientY-r.top;
+    const r = cv.getBoundingClientRect(), x = ev.clientX-r.left, y = ev.clientY-r.top; mouse = {x,y};
     let best=null, bd=18;
     cur.pts.forEach(p => { if(hidden.has(p.m.Familia)) return; const d=Math.hypot(p.X-x,p.Y-y); if(d<bd){bd=d;best=p;} });
     hover = best; cv.style.cursor = best?'pointer':'default';
     if(!best){ tip.classList.remove('show'); return; }
     const m=best.m, d=cur.d;
-    tip.innerHTML = `<b>${m.Material}</b><span style="color:${fams[m.Familia]}">${m.Familia.replace('_',' / ')}</span><br>
-      <span>${PROPS[d.x].l}:</span> ${fmt(best.vx)} ${PROPS[d.x].u}<br><span>${PROPS[d.y].l}:</span> ${fmt(best.vy)} ${PROPS[d.y].u}`;
-    tip.style.left = Math.min(x+16, r.width-tip.offsetWidth-6)+'px'; tip.style.top = Math.max(4,y-70)+'px';
+    tip.innerHTML = `<b>${m.Material}</b><em style="--c:${fams[m.Familia]}">${m.Familia.replace('_',' / ')}</em>
+      <div><span>${PROPS[d.x].l}</span><strong>${fmt(best.vx)} <small>${PROPS[d.x].u}</small></strong></div>
+      <div><span>${PROPS[d.y].l}</span><strong>${fmt(best.vy)} <small>${PROPS[d.y].u}</small></strong></div>`;
+    const left = x+18+tip.offsetWidth > r.width ? x-18-tip.offsetWidth : x+18;
+    tip.style.left = Math.max(6,left)+'px'; tip.style.top = Math.max(6,Math.min(y-40, r.height-tip.offsetHeight-6))+'px';
     tip.classList.add('show');
   }
 
-  return {init, show, toggleFamily, resize};
+  return {init, show, toggleFamily, resize, unpin};
 })();
