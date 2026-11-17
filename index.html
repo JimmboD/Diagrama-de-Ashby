@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Diagramas de Ashby</title>
+<title>Generador de diagramas de Ashby</title>
 <link rel="stylesheet" href="css/style.css">
+<script>if(localStorage.getItem("ashby-theme")==="light")document.documentElement.classList.add("light")</script>
 </head>
 <body>
 <div class="bg" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span><div class="grain"></div></div>
 
 <header class="top">
   <button id="toggleSide" class="burger" type="button" aria-label="Mostrar u ocultar gráficas">☰</button>
-  <div class="brand"><span class="mark"></span>Ashby</div>
-  <span class="tagline">Selección de materiales</span>
+  <div class="brand"><span class="mark"></span>Generador de diagramas de Ashby</div>
   <span class="hint">Pasa el cursor sobre un punto · clic para fijarlo</span>
 </header>
 
@@ -20,6 +20,9 @@
   <aside class="sidebar">
     <h2>Gráficas</h2>
     <ul id="list" class="list"></ul>
+    <div class="side-foot">
+      <label class="switch"><input type="checkbox" id="optLight"><i></i><span class="theme-ic" id="themeIc">☾</span> Modo claro</label>
+    </div>
   </aside>
 
   <main>
@@ -59,7 +62,7 @@
       <label>Eje Y <select id="selY"></select></label>
       <label class="switch"><input type="checkbox" id="logY" checked><i></i> Escala logarítmica</label>
       <div class="row">
-        <button id="btnGen" class="btn" type="button">Generar gráfica</button>
+        <button id="btnGen" class="btn" type="button">Generar diagrama</button>
         <button id="btnSwap" class="btn ghost" type="button" title="Intercambiar ejes">⇄</button>
       </div>
       <p id="formMsg" class="msg"></p>

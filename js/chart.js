@@ -1,7 +1,10 @@
 /* Motor de dibujo de diagramas de Ashby (canvas) — tema oscuro */
 const Ashby = (() => {
   const M = {l:78, r:24, t:18, b:62};
-  const C = {txt:'#e7e9f0', mut:'#8b90a3', bg:'#0a0b10', grid:'#ffffff14', gridMinor:'#ffffff08'};
+  const DARK = {txt:'#e7e9f0', mut:'#8b90a3', grid:'#ffffff14', gridMinor:'#ffffff08', axis:'#ffffff55'};
+  const LIGHT = {txt:'#1a1d29', mut:'#6b7185', grid:'#0f172a14', gridMinor:'#0f172a08', axis:'#0f172a66'};
+  const C = {...DARK};
+  const setTheme = light => Object.assign(C, light ? LIGHT : DARK);
   let cv, ctx, tip, mats = [], fams = {}, hidden = new Set();
   let cur = null, W = 0, H = 0, dpr = 1, anim = {start:0}, hover = null, pinned = null, mouse = null;
   let opts = {labels:()=>false, hulls:()=>true}, onCount = ()=>{}, onPin = ()=>{};
@@ -205,7 +208,7 @@ const Ashby = (() => {
     ticks(dy,logY).forEach(t => { const Y=py((t.v-dy[0])/(dy[1]-dy[0]));
       ctx.strokeStyle=t.major?C.grid:C.gridMinor; ctx.beginPath(); ctx.moveTo(x0,Y); ctx.lineTo(x1,Y); ctx.stroke();
       if(t.major){ ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.fillText(logY?'10'+sup(t.v):fmt(t.v),x0-8,Y); } });
-    ctx.strokeStyle='#ffffff55'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x0,y0); ctx.lineTo(x1,y0); ctx.stroke();
+    ctx.strokeStyle=C.axis; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x0,y0); ctx.lineTo(x1,y0); ctx.stroke();
     ctx.fillStyle=C.txt; ctx.font='600 13px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='bottom';
     ctx.fillText(`${PROPS[d.x].l} (${PROPS[d.x].u})`,(x0+x1)/2,H-6);
     ctx.translate(16,(y0+y1)/2); ctx.rotate(-Math.PI/2); ctx.textBaseline='top';
@@ -229,5 +232,5 @@ const Ashby = (() => {
     tip.classList.add('show');
   }
 
-  return {init, show, toggleFamily, resize, unpin};
+  return {init, show, toggleFamily, resize, unpin, setTheme};
 })();

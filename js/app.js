@@ -75,7 +75,7 @@
     document.body.classList.toggle('is-new', isNew);
     if(isNew){
       activeId = NEW; renderSide();
-      $('title').textContent = 'Nueva gráfica';
+      $('title').textContent = 'Nuevo diagrama';
       $('subtitle').textContent = 'Selecciona las variables físicas de cada eje.';
     } else {
       const d = diagrams.find(d=>d.id===id);
@@ -98,7 +98,7 @@
       li.append(b,x); list.appendChild(li);
     });
     const n = document.createElement('li'); n.className='item add'+(activeId===NEW?' on':'');
-    n.innerHTML = '<button class="name">+ Nueva gráfica</button>';
+    n.innerHTML = '<button class="name">+ Nuevo diagrama</button>';
     n.firstChild.onclick = () => activate(NEW); list.appendChild(n);
 
   }
@@ -117,6 +117,15 @@
     open({x, y, logX:$('logX').checked, logY:$('logY').checked, name:`${PROPS[y].l} vs ${PROPS[x].l}`});
   };
   $('btnSwap').onclick = () => { const a=$('selX').value; $('selX').value=$('selY').value; $('selY').value=a; };
+
+  /* ---------- tema claro / oscuro (oscuro por defecto) ---------- */
+  const root = document.documentElement;
+  function applyTheme(light){
+    root.classList.toggle('light', light); $('optLight').checked = light; $('themeIc').textContent = light ? '☀' : '☾';
+    Ashby.setTheme(light); localStorage.setItem('ashby-theme', light ? 'light' : 'dark');
+  }
+  $('optLight').onchange = e => applyTheme(e.target.checked);
+  applyTheme(root.classList.contains('light'));
 
   /* ---------- leyenda y controles ---------- */
   Object.entries(fams).forEach(([f,col]) => {
