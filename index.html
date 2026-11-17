@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagramas de Ashby</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <button id="toggleSide" class="burger" type="button" aria-label="Mostrar u ocultar gráficas">☰</button>
+  <div class="brand"><span class="mark"></span>Ashby</div>
+  <span class="tagline">Selección de materiales</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <h2>Gráficas</h2>
+    <ul id="list" class="list"></ul>
+  </aside>
+
+  <main>
+    <section class="hero">
+      <h1 id="title"></h1>
+      <p id="subtitle"></p>
+    </section>
+
+    <section id="viewChart">
+      <div id="legend" class="legend"></div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+        <div id="tip" class="tip"></div>
+      </div>
+      <div class="chart-tools">
+        <label class="switch"><input type="checkbox" id="optLabels"><i></i> Etiquetas</label>
+        <label class="switch"><input type="checkbox" id="optHull" checked><i></i> Regiones</label>
+        <span id="count" class="pill"></span>
+      </div>
+
+    </section>
+
+    <section id="viewNew" class="panel" hidden>
+      <label>Diagrama sugerido
+        <select id="selSug"></select>
+      </label>
+      <div class="or"><span>o elige tus variables</span></div>
+      <label>Eje X <select id="selX"></select></label>
+      <label class="switch"><input type="checkbox" id="logX" checked><i></i> Escala logarítmica</label>
+      <label>Eje Y <select id="selY"></select></label>
+      <label class="switch"><input type="checkbox" id="logY" checked><i></i> Escala logarítmica</label>
+      <div class="row">
+        <button id="btnGen" class="btn" type="button">Generar gráfica</button>
+        <button id="btnSwap" class="btn ghost" type="button" title="Intercambiar ejes">⇄</button>
+      </div>
+      <p id="formMsg" class="msg"></p>
+    </section>
+  </main>
+</div>
+
+<script src="data/materiales.js"></script>
+<script src="js/config.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
