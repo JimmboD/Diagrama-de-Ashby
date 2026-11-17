@@ -55,7 +55,7 @@ const Ashby = (() => {
     const rng = k => v.length ? [Math.min(...v.map(p=>p[k])), Math.max(...v.map(p=>p[k]))] : [0,0];
     onCount(v.length, mats.length, {xr:rng('vx'), yr:rng('vy'), fams:new Set(v.map(p=>p.m.Familia)).size, d:cur.d});
   }
-  function toggleFamily(f){ hidden.has(f) ? hidden.delete(f) : hidden.add(f); if(pinned && hidden.has(pinned.m.Familia)){ pinned=null; onPin(null); } count(); }
+  function toggleFamily(f){ const s = fst(f), on = hidden.has(f); on ? hidden.delete(f) : hidden.add(f); s.dir = on ? 1 : -1; s.t0 = performance.now(); if(on && s.fb<=0) s.fb = .001; if(pinned && hidden.has(pinned.m.Familia)){ pinned=null; onPin(null); } count(); }
   function unpin(){ pinned = null; }
 
   function hull(P){
@@ -67,31 +67,89 @@ const Ashby = (() => {
     return lo.slice(0,-1).concat(up.slice(0,-1));
   }
 
+  /* ---------- estado animado por familia ---------- */
+  const FS = {};   // f -> {fb: brillo 0..1, ff: foco 0..1, gb: realce 0..1, t0, dir}
+  const fst = f => FS[f] || (FS[f] = {fb:1, ff:1, gb:0, t0:0, dir:0});
+  // parpadeo de apagado (neón que titila y se extingue) y encendido
+  function flicker(f, now){
+    const s = fst(f); if(!s.dir) return;
+    const e = now - s.t0;
+    if(s.dir < 0){                       // apagando
+      const k = Math.min(1, e/1100);
+      s.fb = k>=1 ? 0 : (1-k*k) * (Math.sin(k*46*(1+k)) > -.1 ? 1 : .12);
+      if(k>=1) s.dir = 0;
+    } else {                             // encendiendo
+      const k = Math.min(1, e/600);
+      s.fb = k>=1 ? 1 : k * (Math.sin(k*28) > -.4 ? 1 : .35);
+      if(k>=1) s.dir = 0;
+    }
+  }
+  function inHull(h, x, y, pad){
+    if(!h.length) return false;
+    let inside = false;
+    for(let i=0,j=h.length-1;i<h.length;j=i++){
+      if(((h[i][1]>y)!=(h[j][1]>y)) && (x < (h[j][0]-h[i][0])*(y-h[i][1])/(h[j][1]-h[i][1])+h[i][0])) inside = !inside;
+    }
+    if(inside) return true;
+    for(let i=0;i<h.length;i++){
+      const a=h[i], b=h[(i+1)%h.length], dx=b[0]-a[0], dy=b[1]-a[1], l=dx*dx+dy*dy;
+      const k = l ? Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/l)) : 0;
+      if(Math.hypot(x-(a[0]+k*dx), y-(a[1]+k*dy)) <= pad) return true;
+    }
+    return false;
+  }
+
+  let hoverFam = null, hulls = {};
+  function drawOrb(x, y, r, col, boost, tw, alpha){
+    if(alpha<=0.01 || r<=0) return;
+    ctx.save(); ctx.globalAlpha = alpha;
+    // punto liso con resplandor suave, como los íconos de la leyenda
+    ctx.shadowColor = col; ctx.shadowBlur = 8 + boost*18;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    ctx.restore();
+  }
   function frame(now){
     requestAnimationFrame(frame);
     if(!cur || !W) return;
     const t = Math.min(1,(now-anim.start)/1100), e = ease(t);
     ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
     drawAxes(Math.min(1,e*1.4));
+    Object.keys(fams).forEach(f => flicker(f, now));
     cur.pts.forEach((p,i) => {
       const k = ease(Math.min(1,Math.max(0,t*1.3-i*0.012)));
       p.cx = p.fx+(p.nx-p.fx)*k; p.cy = p.fy+(p.ny-p.fy)*k; p.s = k;
       p.X = px(p.cx); p.Y = py(p.cy);
-      p.hv += ((hover===p?1:0)-p.hv)*.2;       // suavizado del hover
+      p.hv += ((hover===p?1:0)-p.hv)*.2;
     });
-    const vis = cur.pts.filter(p=>!hidden.has(p.m.Familia));
-    const focusF = hover ? hover.m.Familia : (pinned ? pinned.m.Familia : null);
-    const dim = f => focusF && f!==focusF ? .25 : 1;
+    const vis = cur.pts.filter(p => fst(p.m.Familia).fb > .01);
 
-    if(opts.hulls()) Object.keys(fams).forEach(f => {
-      const g = vis.filter(p=>p.m.Familia==f); if(!g.length) return;
-      const h = hull(g.map(p=>[p.X,p.Y])), col = fams[f], hot = focusF===f;
-      ctx.save(); ctx.globalAlpha = e*dim(f); ctx.lineJoin='round'; ctx.lineCap='round';
+    // regiones (casco convexo) de cada familia
+    hulls = {};
+    Object.keys(fams).forEach(f => {
+      const g = vis.filter(p=>p.m.Familia==f); if(g.length) hulls[f] = hull(g.map(p=>[p.X,p.Y]));
+    });
+    // grupo bajo el cursor (si no hay punto directo)
+    hoverFam = null;
+    if(hover) hoverFam = hover.m.Familia;
+    else if(mouse && opts.hulls()) for(const f in hulls){ if(!hidden.has(f) && inHull(hulls[f], mouse.x, mouse.y, 17)){ hoverFam = f; break; } }
+    const focusF = hoverFam || (pinned ? pinned.m.Familia : null);
+    cv.style.cursor = hover ? 'pointer' : (hoverFam ? 'crosshair' : 'default');
+
+    Object.keys(fams).forEach(f => { const s = fst(f);
+      s.ff += ((focusF && f!==focusF ? .18 : 1) - s.ff)*.14;
+      s.gb += ((focusF===f ? 1 : 0) - s.gb)*.14; });
+
+    if(opts.hulls()) Object.keys(hulls).forEach(f => {
+      const h = hulls[f], col = fams[f], s = fst(f);
+      ctx.save(); ctx.globalAlpha = e*s.fb*s.ff; ctx.lineJoin='round'; ctx.lineCap='round';
       ctx.beginPath(); h.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));
       if(h.length==1) ctx.lineTo(h[0][0]+.01,h[0][1]);
       if(h.length>2) ctx.closePath();
-      ctx.lineWidth = 34; ctx.strokeStyle = hexA(col,hot?.22:.12); ctx.stroke();
-      if(h.length>2){ ctx.fillStyle = hexA(col,hot?.22:.12); ctx.fill(); }
+      const a = .1 + s.gb*.16;
+      ctx.lineWidth = 34; ctx.strokeStyle = hexA(col,a); ctx.stroke();
+      if(h.length>2){ ctx.fillStyle = hexA(col,a); ctx.fill(); }
+      if(s.gb > .02){ ctx.lineWidth = 1.2; ctx.setLineDash([5,6]); ctx.strokeStyle = hexA(col,.5*s.gb); ctx.stroke(); }
       ctx.restore();
     });
 
@@ -109,28 +167,28 @@ const Ashby = (() => {
       ctx.restore();
     }
 
-    const pulse = (Math.sin(now/400)+1)/2;
+    // puntos: esferas luminosas con respiración suave
     vis.forEach(p => {
-      const col = fams[p.m.Familia], isP = pinned===p, r = (7+p.hv*4+(isP?2:0))*p.s; if(r<=0) return;
-      ctx.save(); ctx.globalAlpha = dim(p.m.Familia);
-      ctx.shadowColor = col; ctx.shadowBlur = 8 + p.hv*22 + pulse*3;
-      ctx.beginPath(); ctx.arc(p.X,p.Y,r,0,7); ctx.fillStyle=col; ctx.fill();
-      ctx.shadowBlur=0; ctx.lineWidth=2; ctx.strokeStyle=C.bg; ctx.stroke();
-      if(p.hv>.05 || isP){ ctx.beginPath(); ctx.arc(p.X,p.Y,r+5+pulse*3,0,7); ctx.lineWidth=1.5; ctx.strokeStyle=isP?'#ffffffcc':hexA(col,.7*Math.max(p.hv,.4)); ctx.stroke(); }
-      ctx.restore();
+      const f = p.m.Familia, s = fst(f), col = fams[f], isP = pinned===p;
+      if(!p.ph) p.ph = Math.random()*6.28;
+      const tw = (Math.sin(now/900 + p.ph)+1)/2;
+      const r = (5.5 + p.hv*2.5 + s.gb*1 + (isP?2:0)) * p.s * (.55+.45*s.fb);
+      const boost = Math.max(p.hv, s.gb*.7, isP?1:0);
+      drawOrb(p.X, p.Y, r, col, boost, tw, s.fb*s.ff*(.85+.15*tw));
     });
 
+    // etiquetas: todas, o las del grupo enfocado
     const all = opts.labels();
-    if(all || hover || pinned){
-      ctx.font='11.5px Segoe UI'; ctx.textBaseline='middle'; ctx.fillStyle=C.txt; ctx.globalAlpha=e;
-      vis.forEach(p => { if(!all && hover!==p && pinned!==p) return;
-        ctx.globalAlpha = e*dim(p.m.Familia);
+    if(all || hover || pinned || hoverFam){
+      ctx.font='11.5px Segoe UI'; ctx.textBaseline='middle'; ctx.fillStyle=C.txt;
+      vis.forEach(p => { const f = p.m.Familia;
+        if(!all && hover!==p && pinned!==p && f!==hoverFam) return;
+        ctx.globalAlpha = e*fst(f).fb*fst(f).ff;
         const right = p.X+ctx.measureText(p.m.Material).width+16<W;
-        ctx.textAlign = right?'left':'right'; ctx.fillText(p.m.Material,p.X+(right?12:-12),p.Y-12); });
+        ctx.textAlign = right?'left':'right'; ctx.fillText(p.m.Material,p.X+(right?12:-12),p.Y-13); });
       ctx.globalAlpha=1;
     }
   }
-
   function ticks([a,b],log){
     const out=[];
     if(log){ for(let n=a;n<=b;n++){ out.push({v:n,major:true}); if(n<b) for(let k=2;k<10;k++) out.push({v:n+Math.log10(k),major:false}); } }
@@ -160,7 +218,7 @@ const Ashby = (() => {
     const r = cv.getBoundingClientRect(), x = ev.clientX-r.left, y = ev.clientY-r.top; mouse = {x,y};
     let best=null, bd=18;
     cur.pts.forEach(p => { if(hidden.has(p.m.Familia)) return; const d=Math.hypot(p.X-x,p.Y-y); if(d<bd){bd=d;best=p;} });
-    hover = best; cv.style.cursor = best?'pointer':'default';
+    hover = best;
     if(!best){ tip.classList.remove('show'); return; }
     const m=best.m, d=cur.d;
     tip.innerHTML = `<b>${m.Material}</b><em style="--c:${fams[m.Familia]}">${m.Familia.replace('_',' / ')}</em>
